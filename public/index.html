@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CRM Tienda de Ropa</title>
+    <link rel="stylesheet" href="css/styles.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+</head>
+<body>
+    <div class="sidebar">
+        <div class="logo">
+            <i class="fas fa-shopping-bag"></i>
+            <span>CRM Ropa</span>
+        </div>
+        <nav>
+            <a href="#" class="nav-item active" data-section="dashboard">
+                <i class="fas fa-chart-line"></i> Dashboard
+            </a>
+            <a href="#" class="nav-item" data-section="messages">
+                <i class="fas fa-comments"></i> Mensajes
+                <span class="badge" id="unread-badge" style="display:none">0</span>
+            </a>
+            <a href="#" class="nav-item" data-section="clients">
+                <i class="fas fa-users"></i> Clientes
+            </a>
+            <a href="#" class="nav-item" data-section="products">
+                <i class="fas fa-boxes"></i> Productos
+            </a>
+            <a href="#" class="nav-item" data-section="sales">
+                <i class="fas fa-cash-register"></i> Ventas
+            </a>
+            <a href="#" class="nav-item" data-section="payments">
+                <i class="fas fa-credit-card"></i> Pagos
+            </a>
+        </nav>
+    </div>
+
+    <main class="main-content">
+        <!-- Dashboard Section -->
+        <section id="dashboard" class="section active">
+            <h1>Dashboard</h1>
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <i class="fas fa-users"></i>
+                    <div class="stat-info">
+                        <h3>Clientes</h3>
+                        <p class="stat-value" id="stat-clients">0</p>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <i class="fas fa-boxes"></i>
+                    <div class="stat-info">
+                        <h3>Productos</h3>
+                        <p class="stat-value" id="stat-products">0</p>
+                    </div>
+                </div>
+                <div class="stat-card warning">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <div class="stat-info">
+                        <h3>Stock Bajo</h3>
+                        <p class="stat-value" id="stat-low-stock">0</p>
+                    </div>
+                </div>
+                <div class="stat-card success">
+                    <i class="fas fa-dollar-sign"></i>
+                    <div class="stat-info">
+                        <h3>Ventas Hoy</h3>
+                        <p class="stat-value" id="stat-today-sales">$0</p>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <i class="fas fa-shopping-cart"></i>
+                    <div class="stat-info">
+                        <h3>Ventas Mes</h3>
+                        <p class="stat-value" id="stat-month-sales">0</p>
+                    </div>
+                </div>
+                <div class="stat-card info">
+                    <i class="fas fa-wallet"></i>
+                    <div class="stat-info">
+                        <h3>Pendiente</h3>
+                        <p class="stat-value" id="stat-pending">$0</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Messages Section -->
+        <section id="messages" class="section">
+            <h1>Mensajes</h1>
+            <div class="messages-filter">
+                <label>Filtrar por estado:</label>
+                <select id="conversation-filter" onchange="filterConversations()">
+                    <option value="all">Todas las conversaciones</option>
+                    <option value="nuevo">🆕 Nuevo</option>
+                    <option value="en_proceso">💬 En proceso</option>
+                    <option value="contestado">✅ Contestado</option>
+                    <option value="esperando_pago">💳 Esperando pago</option>
+                    <option value="pagado">💰 Pagado</option>
+                    <option value="completado">📦 Completado</option>
+                    <option value="cancelado">❌ Cancelado</option>
+                </select>
+                <button class="btn-secondary" onclick="sortConversations()">
+                    <i class="fas fa-sort"></i> Ordenar por: <span id="sort-label">Última actualización</span>
+                </button>
+            </div>
+            <div class="messages-container">
+                <div class="conversations-list">
+                    <h3>Conversaciones</h3>
+                    <div id="conversations-list">
+                        <!-- Conversations will be loaded here -->
+                    </div>
+                </div>
+                <div class="chat-area" id="chat-area" style="display:none;">
+                    <div class="chat-header">
+                        <div class="chat-client-info">
+                            <h3 id="chat-client-name">Cliente</h3>
+                            <span class="platform-badge" id="chat-platform"></span>
+                        </div>
+                        <div class="chat-actions">
+                            <button class="btn-icon" onclick="openClientModal()"><i class="fas fa-user-edit"></i></button>
+                        </div>
+                    </div>
+                    <div class="chat-status-bar">
+                        <label>Estado:</label>
+                        <select id="conversation-status" onchange="updateConversationStatus()">
+                            <option value="nuevo">🆕 Nuevo</option>
+                            <option value="en_proceso">💬 En proceso</option>
+                            <option value="contestado">✅ Contestado</option>
+                            <option value="esperando_pago">💳 Esperando pago</option>
+                            <option value="pagado">💰 Pagado</option>
+                            <option value="completado">📦 Completado</option>
+                            <option value="cancelado">❌ Cancelado</option>
+                        </select>
+                        <div class="quick-actions">
+                            <button class="btn-primary btn-sm" onclick="openSaleFromChat()">
+                                <i class="fas fa-shopping-cart"></i> Nueva Venta
+                            </button>
+                            <button class="btn-secondary btn-sm" onclick="openPaymentFromChat()">
+                                <i class="fas fa-credit-card"></i> Registrar Pago
+                            </button>
+                        </div>
+                    </div>
+                    <div class="chat-messages" id="chat-messages">
+                        <!-- Messages will be loaded here -->
+                    </div>
+                    <div class="chat-input">
+                        <select id="message-platform">
+                            <option value="whatsapp">WhatsApp</option>
+                            <option value="instagram">Instagram</option>
+                        </select>
+                        <input type="text" id="message-text" placeholder="Escribir mensaje...">
+                        <button class="btn-primary" onclick="sendMessage()">
+                            <i class="fas fa-paper-plane"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="no-chat" id="no-chat">
+                    <i class="fas fa-comments"></i>
+                    <p>Selecciona una conversación para comenzar</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Clients Section -->
+        <section id="clients" class="section">
+            <div class="section-header">
+                <h1>Clientes</h1>
+                <button class="btn-primary" onclick="openClientForm()">
+                    <i class="fas fa-plus"></i> Nuevo Cliente
+                </button>
+            </div>
+            <div class="table-container">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Nombre</th>
+                            <th>Teléfono</th>
+                            <th>Email</th>
+                            <th>Instagram</th>
+                            <th>WhatsApp</th>
+                            <th>Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody id="clients-table">
+                        <!-- Clients will be loaded here -->
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- Products Section -->
+        <section id="products" class="section">
+            <div class="section-header">
+                <h1>Productos</h1>
+                <button class="btn-primary" onclick="openProductForm()">
+                    <i class="fas fa-plus"></i> Nuevo Producto
+                </button>
+            </div>
+            <div class="products-grid" id="products-grid">
+                <!-- Products will be loaded here -->
+            </div>
+        </section>
+
+        <!-- Sales Section -->
+        <section id="sales" class="section">
+            <div class="section-header">
+                <h1>Ventas</h1>
+                <button class="btn-primary" onclick="openSaleModal()">
+                    <i class="fas fa-plus"></i> Nueva Venta
+                </button>
+            </div>
+            <div class="table-container">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Cliente</th>
+                            <th>Total</th>
+                            <th>Método de Pago</th>
+                            <th>Estado</th>
+                            <th>Fecha</th>
+                            <th>Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody id="sales-table">
+                        <!-- Sales will be loaded here -->
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- Payments Section -->
+        <section id="payments" class="section">
+            <h1>Pagos</h1>
+            <div class="table-container">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Venta</th>
+                            <th>Monto</th>
+                            <th>Método</th>
+                            <th>Estado</th>
+                            <th>Fecha</th>
+                        </tr>
+                    </thead>
+                    <tbody id="payments-table">
+                        <!-- Payments will be loaded here -->
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </main>
+
+    <!-- Client Modal -->
+    <div class="modal" id="client-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="client-modal-title">Nuevo Cliente</h2>
+                <button class="btn-close" onclick="closeModal('client-modal')">&times;</button>
+            </div>
+            <form id="client-form" onsubmit="saveClient(event)">
+                <input type="hidden" id="client-id">
+                <div class="form-group">
+                    <label>Nombre</label>
+                    <input type="text" id="client-name" required>
+                </div>
+                <div class="form-group">
+                    <label>Teléfono</label>
+                    <input type="tel" id="client-phone">
+                </div>
+                <div class="form-group">
+                    <label>Email</label>
+                    <input type="email" id="client-email">
+                </div>
+                <div class="form-group">
+                    <label>Instagram</label>
+                    <input type="text" id="client-instagram">
+                </div>
+                <div class="form-group checkbox">
+                    <input type="checkbox" id="client-whatsapp">
+                    <label>Activar WhatsApp</label>
+                </div>
+                <div class="form-group checkbox">
+                    <input type="checkbox" id="client-instagram-active">
+                    <label>Activar Instagram</label>
+                </div>
+                <button type="submit" class="btn-primary">Guardar</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Product Modal -->
+    <div class="modal" id="product-modal">
+        <div class="modal-content modal-large">
+            <div class="modal-header">
+                <h2 id="product-modal-title">Nuevo Producto</h2>
+                <button class="btn-close" onclick="closeModal('product-modal')">&times;</button>
+            </div>
+            <form id="product-form" onsubmit="saveProduct(event)">
+                <input type="hidden" id="product-id">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Nombre</label>
+                        <input type="text" id="product-name" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Categoría</label>
+                        <input type="text" id="product-category">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Descripción</label>
+                    <textarea id="product-description"></textarea>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Talle</label>
+                        <input type="text" id="product-size">
+                    </div>
+                    <div class="form-group">
+                        <label>Color</label>
+                        <input type="text" id="product-color">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Precio</label>
+                        <input type="number" step="0.01" id="product-price" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Costo</label>
+                        <input type="number" step="0.01" id="product-cost">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Stock</label>
+                        <input type="number" id="product-stock" value="0">
+                    </div>
+                    <div class="form-group">
+                        <label>Stock Mínimo</label>
+                        <input type="number" id="product-min-stock" value="5">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>URL de Imagen</label>
+                    <input type="url" id="product-image">
+                </div>
+                <button type="submit" class="btn-primary">Guardar</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Sale Modal -->
+    <div class="modal" id="sale-modal">
+        <div class="modal-content modal-large">
+            <div class="modal-header">
+                <h2>Nueva Venta</h2>
+                <button class="btn-close" onclick="closeModal('sale-modal')">&times;</button>
+            </div>
+            <form id="sale-form" onsubmit="saveSale(event)">
+                <div class="form-group">
+                    <label>Cliente</label>
+                    <select id="sale-client">
+                        <option value="">Sin cliente</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Productos</label>
+                    <div class="sale-products" id="sale-products">
+                        <!-- Product selection will be loaded here -->
+                    </div>
+                </div>
+                <div class="sale-items" id="sale-items">
+                    <!-- Selected items will appear here -->
+                </div>
+                <div class="sale-total">
+                    <strong>Total: $<span id="sale-total">0.00</span></strong>
+                </div>
+                <div class="form-group">
+                    <label>Método de Pago</label>
+                    <select id="sale-payment-method">
+                        <option value="cash">Efectivo</option>
+                        <option value="transfer">Transferencia</option>
+                        <option value="card">Tarjeta</option>
+                        <option value="mercadopago">MercadoPago</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Notas</label>
+                    <textarea id="sale-notes"></textarea>
+                </div>
+                <button type="submit" class="btn-primary">Completar Venta</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- View Sale Modal -->
+    <div class="modal" id="view-sale-modal">
+        <div class="modal-content modal-large">
+            <div class="modal-header">
+                <h2>Detalle de Venta #<span id="view-sale-id"></span></h2>
+                <button class="btn-close" onclick="closeModal('view-sale-modal')">&times;</button>
+            </div>
+            <div id="view-sale-details">
+                <!-- Sale details will be loaded here -->
+            </div>
+        </div>
+    </div>
+
+    <script src="js/app.js"></script>
+</body>
+</html>

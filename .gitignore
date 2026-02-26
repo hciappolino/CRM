@@ -1,0 +1,4 @@
+node_modules/
+crm.db
+*.log
+.env
