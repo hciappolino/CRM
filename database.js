@@ -1,4 +1,5 @@
 const { Pool } = require('pg');
+const bcrypt = require('bcrypt');
 
 console.log('DATABASE_URL:', process.env.DATABASE_URL ? 'Set' : 'NOT SET');
 
@@ -125,7 +126,6 @@ async function initDb() {
     console.log('Database tables created successfully');
     
     // Create default admin user if none exists
-    const bcrypt = require('bcrypt');
     const users = await pool.query('SELECT id FROM users LIMIT 1');
     if (users.rows.length === 0) {
       const defaultPassword = await bcrypt.hash('admin123', 10);
@@ -135,8 +135,6 @@ async function initDb() {
       );
       console.log('Default admin user created: admin / admin123');
     }
-    
-    console.log('Database tables created successfully');
   } finally {
     client.release();
   }
