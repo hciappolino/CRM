@@ -39,6 +39,7 @@ async function initDb() {
         phone TEXT,
         email TEXT,
         instagram TEXT,
+        instagram_user_id TEXT,
         whatsapp INTEGER DEFAULT 0,
         instagram_active INTEGER DEFAULT 0,
         conversation_status TEXT DEFAULT 'nuevo',
@@ -136,6 +137,11 @@ async function initDb() {
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `);
+
+    // Lightweight migrations for existing databases
+    await client.query('ALTER TABLE clients ADD COLUMN IF NOT EXISTS instagram_user_id TEXT');
+    await client.query('CREATE INDEX IF NOT EXISTS idx_clients_instagram_user_id ON clients(instagram_user_id)');
+    await client.query('CREATE INDEX IF NOT EXISTS idx_messages_message_id ON messages(message_id)');
     
     console.log('Database tables created successfully');
     

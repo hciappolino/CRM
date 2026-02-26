@@ -9,6 +9,161 @@ const { initDb, runQuery, runInsert, runUpdate, runDelete } = require('./databas
 const app = express();
 const PORT = process.env.PORT || 3000;
 const JWT_SECRET = process.env.JWT_SECRET || 'crm-secret-key-change-in-production';
+const META_GRAPH_VERSION = process.env.META_GRAPH_VERSION || 'v21.0';
+
+const WHATSAPP_TOKEN = process.env.WHATSAPP_TOKEN || '';
+const WHATSAPP_PHONE_ID = process.env.WHATSAPP_PHONE_ID || '';
+const WHATSAPP_WEBHOOK_VERIFY_TOKEN = process.env.WHATSAPP_WEBHOOK_VERIFY_TOKEN || '';
+
+const INSTAGRAM_ACCESS_TOKEN = process.env.INSTAGRAM_ACCESS_TOKEN || '';
+const INSTAGRAM_BUSINESS_ACCOUNT_ID = process.env.INSTAGRAM_BUSINESS_ACCOUNT_ID || '';
+const INSTAGRAM_WEBHOOK_VERIFY_TOKEN = process.env.INSTAGRAM_WEBHOOK_VERIFY_TOKEN || WHATSAPP_WEBHOOK_VERIFY_TOKEN;
+
+function normalizePhone(value = '') {
+  return String(value).replace(/\D/g, '');
+}
+
+function normalizeInstagram(value = '') {
+  return String(value).trim().replace(/^@+/, '').toLowerCase();
+}
+
+function normalizeIncomingText(value) {
+  if (typeof value === 'string' && value.trim()) return value.trim();
+  return '[Mensaje no textual]';
+}
+
+async function graphApiRequest(pathname, token, body, method = 'POST') {
+  const response = await fetch(`https://graph.facebook.com/${META_GRAPH_VERSION}/${pathname}`, {
+    method,
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json'
+    },
+    body: body ? JSON.stringify(body) : undefined
+  });
+
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const details = data?.error?.message || JSON.stringify(data);
+    throw new Error(details || 'Graph API request failed');
+  }
+  return data;
+}
+
+async function findOrCreateWhatsappClient(fromPhone, profileName) {
+  const normalized = normalizePhone(fromPhone);
+  const existing = await runQuery(
+    "SELECT * FROM clients WHERE regexp_replace(COALESCE(phone, ''), '\\D', '', 'g') = $1 LIMIT 1",
+    [normalized]
+  );
+
+  if (existing.length > 0) {
+    if (!existing[0].whatsapp) {
+      await runUpdate('UPDATE clients SET whatsapp = 1, updated_at = CURRENT_TIMESTAMP WHERE id = $1', [existing[0].id]);
+      existing[0].whatsapp = 1;
+    }
+    return existing[0];
+  }
+
+  const displayName = (profileName && profileName.trim()) || `WhatsApp ${normalized.slice(-4) || 'nuevo'}`;
+  const insertResult = await runInsert(
+    'INSERT INTO clients (name, phone, whatsapp, conversation_status) VALUES ($1, $2, $3, $4) RETURNING id',
+    [displayName, fromPhone || null, 1, 'nuevo']
+  );
+
+  const created = await runQuery('SELECT * FROM clients WHERE id = $1', [insertResult.lastInsertRowid]);
+  return created[0];
+}
+
+async function getInstagramUsername(igUserId) {
+  if (!INSTAGRAM_ACCESS_TOKEN) return null;
+  try {
+    const data = await graphApiRequest(`${igUserId}?fields=username`, INSTAGRAM_ACCESS_TOKEN, null, 'GET');
+    return data?.username ? normalizeInstagram(data.username) : null;
+  } catch (error) {
+    console.log('Instagram username lookup failed:', error.message);
+    return null;
+  }
+}
+
+async function findOrCreateInstagramClient(igUserId) {
+  const existingById = await runQuery('SELECT * FROM clients WHERE instagram_user_id = $1 LIMIT 1', [igUserId]);
+  if (existingById.length > 0) {
+    if (!existingById[0].instagram_active) {
+      await runUpdate('UPDATE clients SET instagram_active = 1, updated_at = CURRENT_TIMESTAMP WHERE id = $1', [existingById[0].id]);
+      existingById[0].instagram_active = 1;
+    }
+    return existingById[0];
+  }
+
+  const username = await getInstagramUsername(igUserId);
+  if (username) {
+    const existingByHandle = await runQuery(
+      "SELECT * FROM clients WHERE LOWER(TRIM(BOTH '@' FROM COALESCE(instagram, ''))) = $1 LIMIT 1",
+      [username]
+    );
+
+    if (existingByHandle.length > 0) {
+      await runUpdate(
+        'UPDATE clients SET instagram_user_id = $1, instagram_active = 1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
+        [igUserId, existingByHandle[0].id]
+      );
+      existingByHandle[0].instagram_user_id = igUserId;
+      existingByHandle[0].instagram_active = 1;
+      return existingByHandle[0];
+    }
+  }
+
+  const fallbackHandle = username || `ig_${igUserId}`;
+  const insertResult = await runInsert(
+    'INSERT INTO clients (name, instagram, instagram_user_id, instagram_active, conversation_status) VALUES ($1, $2, $3, $4, $5) RETURNING id',
+    [fallbackHandle, fallbackHandle, igUserId, 1, 'nuevo']
+  );
+
+  const created = await runQuery('SELECT * FROM clients WHERE id = $1', [insertResult.lastInsertRowid]);
+  return created[0];
+}
+
+async function sendWhatsAppMessage(client, messageText) {
+  if (!WHATSAPP_TOKEN || !WHATSAPP_PHONE_ID) {
+    throw new Error('WhatsApp is not configured. Missing WHATSAPP_TOKEN or WHATSAPP_PHONE_ID');
+  }
+
+  const to = normalizePhone(client.phone);
+  if (!to) throw new Error('El cliente no tiene telefono valido para WhatsApp');
+
+  const payload = {
+    messaging_product: 'whatsapp',
+    recipient_type: 'individual',
+    to,
+    type: 'text',
+    text: { body: messageText }
+  };
+
+  return graphApiRequest(`${WHATSAPP_PHONE_ID}/messages`, WHATSAPP_TOKEN, payload);
+}
+
+async function sendInstagramMessage(client, messageText) {
+  if (!INSTAGRAM_ACCESS_TOKEN || !INSTAGRAM_BUSINESS_ACCOUNT_ID) {
+    throw new Error('Instagram is not configured. Missing INSTAGRAM_ACCESS_TOKEN or INSTAGRAM_BUSINESS_ACCOUNT_ID');
+  }
+
+  let recipientId = client.instagram_user_id;
+  if (!recipientId && /^\d+$/.test(String(client.instagram || ''))) {
+    recipientId = String(client.instagram);
+  }
+
+  if (!recipientId) {
+    throw new Error('El cliente no tiene instagram_user_id. Espera un mensaje entrante primero o cargalo manualmente.');
+  }
+
+  const payload = {
+    recipient: { id: recipientId },
+    message: { text: messageText }
+  };
+
+  return graphApiRequest(`${INSTAGRAM_BUSINESS_ACCOUNT_ID}/messages`, INSTAGRAM_ACCESS_TOKEN, payload);
+}
 
 // Middleware
 app.use(cors());
@@ -36,7 +191,6 @@ app.post('/api/auth/login', async (req, res) => {
   try {
     const { username, password } = req.body;
     console.log('Login attempt for user:', username);
-    console.log('Password received:', password);
     
     if (!username || !password) {
       return res.status(400).json({ error: 'Usuario y contraseña requeridos' });
@@ -49,8 +203,6 @@ app.post('/api/auth/login', async (req, res) => {
     if (users.length === 0) return res.status(400).json({ error: 'Usuario o contraseña incorrecta' });
     
     const user = users[0];
-    console.log('Stored password hash:', user.password);
-    console.log('Input password:', password);
     
     let validPassword = false;
     try {
@@ -213,12 +365,12 @@ app.get('/api/clients/:id', authenticateToken, async (req, res) => {
 // Create client
 app.post('/api/clients', authenticateToken, async (req, res) => {
   try {
-    const { name, phone, email, instagram, whatsapp } = req.body;
+    const { name, phone, email, instagram, instagram_user_id, whatsapp } = req.body;
     const result = await runInsert(
-      'INSERT INTO clients (name, phone, email, instagram, whatsapp) VALUES ($1, $2, $3, $4, $5) RETURNING id',
-      [name, phone || null, email || null, instagram || null, whatsapp ? 1 : 0]
+      'INSERT INTO clients (name, phone, email, instagram, instagram_user_id, whatsapp) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id',
+      [name, phone || null, email || null, instagram || null, instagram_user_id || null, whatsapp ? 1 : 0]
     );
-    res.status(201).json({ id: result.lastInsertRowid, name, phone, email, instagram, whatsapp });
+    res.status(201).json({ id: result.lastInsertRowid, name, phone, email, instagram, instagram_user_id, whatsapp });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -227,10 +379,10 @@ app.post('/api/clients', authenticateToken, async (req, res) => {
 // Update client
 app.put('/api/clients/:id', authenticateToken, async (req, res) => {
   try {
-    const { name, phone, email, instagram, whatsapp, instagram_active } = req.body;
+    const { name, phone, email, instagram, instagram_user_id, whatsapp, instagram_active } = req.body;
     await runUpdate(
-      'UPDATE clients SET name = $1, phone = $2, email = $3, instagram = $4, whatsapp = $5, instagram_active = $6, updated_at = CURRENT_TIMESTAMP WHERE id = $7',
-      [name, phone || null, email || null, instagram || null, whatsapp ? 1 : 0, instagram_active ? 1 : 0, parseInt(req.params.id)]
+      'UPDATE clients SET name = $1, phone = $2, email = $3, instagram = $4, instagram_user_id = $5, whatsapp = $6, instagram_active = $7, updated_at = CURRENT_TIMESTAMP WHERE id = $8',
+      [name, phone || null, email || null, instagram || null, instagram_user_id || null, whatsapp ? 1 : 0, instagram_active ? 1 : 0, parseInt(req.params.id)]
     );
     res.json({ success: true });
   } catch (error) {
@@ -445,26 +597,57 @@ app.get('/api/conversations', async (req, res) => {
   }
 });
 
-// Send message (simulated - in production would connect to WhatsApp/Instagram API)
+// Send message through WhatsApp/Instagram Graph API
 app.post('/api/messages', async (req, res) => {
   try {
     const { client_id, platform, message_text } = req.body;
-    
-    const result = await runInsert(
-      'INSERT INTO messages (client_id, platform, message_text, direction, status) VALUES ($1, $2, $3, $4, $5) RETURNING id',
-      [parseInt(client_id), platform, message_text, 'outbound', 'sent']
+    const normalizedPlatform = String(platform || '').toLowerCase();
+    const parsedClientId = parseInt(client_id, 10);
+
+    if (!parsedClientId || !['whatsapp', 'instagram'].includes(normalizedPlatform)) {
+      return res.status(400).json({ error: 'Datos de mensaje invalidos' });
+    }
+
+    if (!message_text || !String(message_text).trim()) {
+      return res.status(400).json({ error: 'El mensaje no puede estar vacio' });
+    }
+
+    const clients = await runQuery('SELECT * FROM clients WHERE id = $1', [parsedClientId]);
+    if (clients.length === 0) return res.status(404).json({ error: 'Cliente no encontrado' });
+
+    const client = clients[0];
+    let providerResponse;
+
+    if (normalizedPlatform === 'whatsapp') {
+      providerResponse = await sendWhatsAppMessage(client, String(message_text).trim());
+    } else {
+      providerResponse = await sendInstagramMessage(client, String(message_text).trim());
+    }
+
+    const providerMessageId =
+      providerResponse?.messages?.[0]?.id ||
+      providerResponse?.message_id ||
+      providerResponse?.id ||
+      null;
+
+    const insertResult = await runInsert(
+      'INSERT INTO messages (client_id, platform, message_text, direction, status, message_id) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id',
+      [parsedClientId, normalizedPlatform, String(message_text).trim(), 'outbound', 'sent', providerMessageId]
     );
-    
-    res.status(201).json({ 
-      id: result.lastInsertRowid, 
-      client_id: parseInt(client_id), 
-      platform, 
-      message_text, 
+
+    res.status(201).json({
+      id: insertResult.lastInsertRowid,
+      client_id: parsedClientId,
+      platform: normalizedPlatform,
+      message_text: String(message_text).trim(),
       direction: 'outbound',
-      status: 'sent'
+      status: 'sent',
+      message_id: providerMessageId,
+      provider: providerResponse
     });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error('Error sending message:', error.message);
+    res.status(502).json({ error: error.message });
   }
 });
 
@@ -500,6 +683,111 @@ app.put('/api/messages/read/:clientId', async (req, res) => {
     );
     res.json({ success: true });
   } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ==================== META WEBHOOKS ====================
+
+function verifyWebhookToken(req, res, expectedToken) {
+  const mode = req.query['hub.mode'];
+  const token = req.query['hub.verify_token'];
+  const challenge = req.query['hub.challenge'];
+
+  if (mode === 'subscribe' && expectedToken && token === expectedToken) {
+    return res.status(200).send(challenge);
+  }
+  return res.sendStatus(403);
+}
+
+app.get('/api/webhooks/whatsapp', (req, res) => verifyWebhookToken(req, res, WHATSAPP_WEBHOOK_VERIFY_TOKEN));
+app.get('/api/webhooks/instagram', (req, res) => verifyWebhookToken(req, res, INSTAGRAM_WEBHOOK_VERIFY_TOKEN));
+
+app.post('/api/webhooks/whatsapp', async (req, res) => {
+  try {
+    const entries = Array.isArray(req.body?.entry) ? req.body.entry : [];
+
+    for (const entry of entries) {
+      const changes = Array.isArray(entry?.changes) ? entry.changes : [];
+
+      for (const change of changes) {
+        const value = change?.value || {};
+
+        const statuses = Array.isArray(value.statuses) ? value.statuses : [];
+        for (const statusItem of statuses) {
+          const providerId = statusItem?.id;
+          const status = statusItem?.status;
+          if (!providerId || !status) continue;
+
+          await runUpdate('UPDATE messages SET status = $1 WHERE message_id = $2', [status, providerId]);
+        }
+
+        const incomingMessages = Array.isArray(value.messages) ? value.messages : [];
+        const contacts = Array.isArray(value.contacts) ? value.contacts : [];
+
+        for (const incoming of incomingMessages) {
+          const from = incoming?.from;
+          if (!from) continue;
+
+          const matchingContact = contacts.find(c => c?.wa_id === from);
+          const profileName = matchingContact?.profile?.name || null;
+          const messageText = normalizeIncomingText(incoming?.text?.body);
+          const messageId = incoming?.id || null;
+
+          const client = await findOrCreateWhatsappClient(from, profileName);
+
+          const alreadyStored = messageId
+            ? await runQuery('SELECT id FROM messages WHERE message_id = $1 LIMIT 1', [messageId])
+            : [];
+          if (alreadyStored.length > 0) continue;
+
+          await runInsert(
+            'INSERT INTO messages (client_id, platform, message_text, direction, status, message_id) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id',
+            [client.id, 'whatsapp', messageText, 'inbound', 'sent', messageId]
+          );
+        }
+      }
+    }
+
+    res.status(200).send('EVENT_RECEIVED');
+  } catch (error) {
+    console.error('WhatsApp webhook error:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/webhooks/instagram', async (req, res) => {
+  try {
+    const entries = Array.isArray(req.body?.entry) ? req.body.entry : [];
+
+    for (const entry of entries) {
+      const messaging = Array.isArray(entry?.messaging) ? entry.messaging : [];
+
+      for (const event of messaging) {
+        const senderId = event?.sender?.id ? String(event.sender.id) : null;
+        const messageText = event?.message?.text ? normalizeIncomingText(event.message.text) : null;
+        const messageId = event?.message?.mid || event?.message?.id || null;
+
+        if (!senderId || !messageText) continue;
+        if (INSTAGRAM_BUSINESS_ACCOUNT_ID && senderId === INSTAGRAM_BUSINESS_ACCOUNT_ID) continue;
+
+        const client = await findOrCreateInstagramClient(senderId);
+
+        const alreadyStored = messageId
+          ? await runQuery('SELECT id FROM messages WHERE message_id = $1 LIMIT 1', [messageId])
+          : [];
+        if (alreadyStored.length > 0) continue;
+
+        await runInsert(
+          'INSERT INTO messages (client_id, platform, message_text, direction, status, message_id) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id',
+          [client.id, 'instagram', messageText, 'inbound', 'sent', messageId]
+        );
+      }
+    }
+
+    res.status(200).send('EVENT_RECEIVED');
+  } catch (error) {
+    console.error('Instagram webhook error:', error.message);
     res.status(500).json({ error: error.message });
   }
 });
