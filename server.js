@@ -52,8 +52,9 @@ app.post('/api/auth/login', async (req, res) => {
     console.log('Stored password hash:', user.password);
     console.log('Input password:', password);
     
+    let validPassword = false;
     try {
-      const validPassword = await bcrypt.compare(password, user.password);
+      validPassword = await bcrypt.compare(password, user.password);
       console.log('Password valid:', validPassword);
     } catch (err) {
       console.log('Bcrypt error:', err.message);
