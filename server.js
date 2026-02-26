@@ -36,6 +36,7 @@ app.post('/api/auth/login', async (req, res) => {
   try {
     const { username, password } = req.body;
     console.log('Login attempt for user:', username);
+    console.log('Password received:', password);
     
     if (!username || !password) {
       return res.status(400).json({ error: 'Usuario y contraseña requeridos' });
@@ -48,11 +49,16 @@ app.post('/api/auth/login', async (req, res) => {
     if (users.length === 0) return res.status(400).json({ error: 'Usuario o contraseña incorrecta' });
     
     const user = users[0];
-    console.log('Stored password hash:', user.password.substring(0, 20) + '...');
+    console.log('Stored password hash:', user.password);
     console.log('Input password:', password);
     
-    const validPassword = await bcrypt.compare(password, user.password);
-    console.log('Password valid:', validPassword);
+    try {
+      const validPassword = await bcrypt.compare(password, user.password);
+      console.log('Password valid:', validPassword);
+    } catch (err) {
+      console.log('Bcrypt error:', err.message);
+      return res.status(500).json({ error: 'Error comparing password: ' + err.message });
+    }
     
     if (!validPassword) return res.status(400).json({ error: 'Usuario o contraseña incorrecta' });
     
@@ -132,6 +138,7 @@ app.post('/api/auth/reset-admin', async (req, res) => {
     }
     
     const hashedPassword = await bcrypt.hash('admin123', 10);
+    console.log('New hash generated:', hashedPassword);
     
     // Delete existing admin and create new one
     await runDelete('DELETE FROM users WHERE username = $1', ['admin']);
@@ -141,7 +148,11 @@ app.post('/api/auth/reset-admin', async (req, res) => {
       ['admin', hashedPassword, 'admin']
     );
     
-    res.json({ message: 'Admin password reset successfully', id: result.lastInsertRowid });
+    // Test the password
+    const testResult = await bcrypt.compare('admin123', hashedPassword);
+    console.log('Password test result:', testResult);
+    
+    res.json({ message: 'Admin password reset successfully', id: result.lastInsertRowid, test: testResult });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
