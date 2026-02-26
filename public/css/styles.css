@@ -104,7 +104,6 @@ body {
 }
 
 .btn-primary {
-    width: 100%;
     padding: 14px;
     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
     color: white;
@@ -121,7 +120,6 @@ body {
 }
 
 .btn-secondary {
-    width: 100%;
     padding: 14px;
     background: #4CAF50;
     color: white;
@@ -130,6 +128,17 @@ body {
     font-size: 16px;
     font-weight: 600;
     cursor: pointer;
+}
+
+#login-form .btn-primary,
+#register-form .btn-primary,
+#login-form .btn-secondary,
+#register-form .btn-secondary {
+    width: 100%;
+}
+
+#login-form .btn-secondary,
+#register-form .btn-secondary {
     margin-top: 10px;
 }
 
@@ -158,6 +167,10 @@ body {
 }
 
 /* Main content hidden until logged in */
+body.logged-in .login-overlay {
+    display: none;
+}
+
 body.logged-in .sidebar,
 body.logged-in .main-content {
     display: block;

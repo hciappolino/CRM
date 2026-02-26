@@ -1,16 +1,30 @@
 const { Pool } = require('pg');
 const bcrypt = require('bcrypt');
 
-console.log('DATABASE_URL:', process.env.DATABASE_URL ? 'Set' : 'NOT SET');
+const isProduction = process.env.NODE_ENV === 'production';
+const hasDatabaseUrl = Boolean(process.env.DATABASE_URL);
+
+const localPgConfig = {
+  user: process.env.PGUSER || 'postgres',
+  password: process.env.PGPASSWORD || 'dbpass',
+  host: process.env.PGHOST || 'localhost',
+  port: process.env.PGPORT || '5432',
+  database: process.env.PGDATABASE || 'postgres'
+};
+
+const fallbackDatabaseUrl = `postgresql://${encodeURIComponent(localPgConfig.user)}:${encodeURIComponent(localPgConfig.password)}@${localPgConfig.host}:${localPgConfig.port}/${localPgConfig.database}`;
+const connectionString = process.env.DATABASE_URL || fallbackDatabaseUrl;
+
+console.log('DATABASE_URL:', hasDatabaseUrl ? 'Set' : `NOT SET (using local fallback: ${localPgConfig.host}:${localPgConfig.port}/${localPgConfig.database})`);
 
 const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
+  connectionString,
+  ssl: hasDatabaseUrl && isProduction ? { rejectUnauthorized: false } : false
 });
 
 // Initialize database tables
 async function initDb() {
-  if (!process.env.DATABASE_URL) {
+  if (!hasDatabaseUrl && isProduction) {
     throw new Error('DATABASE_URL environment variable is not set. Please add PostgreSQL plugin in Railway.');
   }
   
