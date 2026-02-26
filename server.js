@@ -35,12 +35,18 @@ function authenticateToken(req, res, next) {
 app.post('/api/auth/login', async (req, res) => {
   try {
     const { username, password } = req.body;
+    console.log('Login attempt for user:', username);
     
     const users = await runQuery('SELECT * FROM users WHERE username = $1', [username]);
+    console.log('Users found in DB:', users.length);
+    
     if (users.length === 0) return res.status(400).json({ error: 'Usuario o contraseña incorrecta' });
     
     const user = users[0];
+    console.log('User found, comparing password...');
     const validPassword = await bcrypt.compare(password, user.password);
+    console.log('Password valid:', validPassword);
+    
     if (!validPassword) return res.status(400).json({ error: 'Usuario o contraseña incorrecta' });
     
     const token = jwt.sign({ id: user.id, username: user.username, role: user.role }, JWT_SECRET, { expiresIn: '24h' });
