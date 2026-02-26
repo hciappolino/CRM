@@ -51,10 +51,21 @@ app.post('/api/auth/login', async (req, res) => {
   }
 });
 
-// Register
-app.post('/api/auth/register', async (req, res) => {
+// Verify token
+app.get('/api/auth/verify', authenticateToken, (req, res) => {
+  res.json({ user: req.user });
+});
+
+// Create admin user (only with secret key)
+app.post('/api/auth/create-admin', async (req, res) => {
   try {
-    const { username, password } = req.body;
+    const { secret_key, username, password } = req.body;
+    
+    // Verify secret key (change this in production!)
+    const ADMIN_SECRET = process.env.ADMIN_SECRET || 'crm-admin-secret';
+    if (secret_key !== ADMIN_SECRET) {
+      return res.status(403).json({ error: 'Clave secreta incorrecta' });
+    }
     
     const existing = await runQuery('SELECT id FROM users WHERE username = $1', [username]);
     if (existing.length > 0) return res.status(400).json({ error: 'El usuario ya existe' });
@@ -63,18 +74,38 @@ app.post('/api/auth/register', async (req, res) => {
     
     const result = await runInsert(
       'INSERT INTO users (username, password, role) VALUES ($1, $2, $3) RETURNING id',
-      [username, hashedPassword, 'user']
+      [username, hashedPassword, 'admin']
     );
     
-    res.status(201).json({ message: 'Usuario creado exitosamente', id: result.lastInsertRowid });
+    res.status(201).json({ message: 'Usuario administrador creado', id: result.lastInsertRowid });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
-// Verify token
-app.get('/api/auth/verify', authenticateToken, (req, res) => {
-  res.json({ user: req.user });
+// Change password
+app.post('/api/auth/change-password', authenticateToken, async (req, res) => {
+  try {
+    const { current_password, new_password } = req.body;
+    const userId = req.user.id;
+    
+    const users = await runQuery('SELECT password FROM users WHERE id = $1', [userId]);
+    if (users.length === 0) return res.status(404).json({ error: 'Usuario no encontrado' });
+    
+    const validPassword = await bcrypt.compare(current_password, users[0].password);
+    if (!validPassword) return res.status(400).json({ error: 'Contraseña actual incorrecta' });
+    
+    const hashedNewPassword = await bcrypt.hash(new_password, 10);
+    
+    await runUpdate(
+      'UPDATE users SET password = $1 WHERE id = $2',
+      [hashedNewPassword, userId]
+    );
+    
+    res.json({ message: 'Contraseña cambiada exitosamente' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
 });
 
 // ==================== CLIENTS API ====================

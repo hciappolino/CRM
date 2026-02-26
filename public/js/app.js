@@ -55,6 +55,7 @@ async function checkAuth() {
         if (response.ok) {
             document.body.classList.add('logged-in');
             initNavigation();
+            initSettingsHandlers();
             loadDashboard();
             loadClients();
             loadProducts();
@@ -72,9 +73,6 @@ async function checkAuth() {
 // Login handlers
 function initLoginHandlers() {
     const loginForm = document.getElementById('login-form');
-    const registerForm = document.getElementById('register-form');
-    const showRegister = document.getElementById('show-register');
-    const showLogin = document.getElementById('show-login');
     
     if (loginForm) {
         loginForm.addEventListener('submit', async (e) => {
@@ -97,6 +95,7 @@ function initLoginHandlers() {
                     localStorage.setItem('crm_user', JSON.stringify(data.user));
                     document.body.classList.add('logged-in');
                     initNavigation();
+                    initSettingsHandlers();
                     loadDashboard();
                     loadClients();
                     loadProducts();
@@ -111,48 +110,58 @@ function initLoginHandlers() {
             }
         });
     }
+}
+
+// Password change handler
+function initSettingsHandlers() {
+    const changePasswordForm = document.getElementById('change-password-form');
+    const logoutBtn = document.getElementById('logout-btn');
     
-    if (showRegister) {
-        showRegister.addEventListener('click', (e) => {
+    if (changePasswordForm) {
+        changePasswordForm.addEventListener('submit', async (e) => {
             e.preventDefault();
-            document.getElementById('login-form').style.display = 'none';
-            document.getElementById('register-form').style.display = 'block';
-        });
-    }
-    
-    if (showLogin) {
-        showLogin.addEventListener('click', (e) => {
-            e.preventDefault();
-            document.getElementById('register-form').style.display = 'none';
-            document.getElementById('login-form').style.display = 'block';
-        });
-    }
-    
-    if (registerForm) {
-        registerForm.addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const username = document.getElementById('reg-username').value;
-            const password = document.getElementById('reg-password').value;
+            const currentPassword = document.getElementById('current-password').value;
+            const newPassword = document.getElementById('new-password').value;
+            const confirmPassword = document.getElementById('confirm-password').value;
+            const messageEl = document.getElementById('password-message');
+            
+            if (newPassword !== confirmPassword) {
+                messageEl.textContent = 'Las contraseñas no coinciden';
+                messageEl.style.color = 'red';
+                return;
+            }
             
             try {
-                const response = await fetch('/api/auth/register', {
+                const response = await fetch('/api/auth/change-password', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ username, password })
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authToken}`
+                    },
+                    body: JSON.stringify({ current_password: currentPassword, new_password: newPassword })
                 });
                 
                 const data = await response.json();
                 
                 if (response.ok) {
-                    alert('Usuario creado. Ahora puedes iniciar sesión.');
-                    document.getElementById('register-form').style.display = 'none';
-                    document.getElementById('login-form').style.display = 'block';
+                    messageEl.textContent = 'Contraseña cambiada exitosamente';
+                    messageEl.style.color = 'green';
+                    changePasswordForm.reset();
                 } else {
-                    document.getElementById('register-error').textContent = data.error;
+                    messageEl.textContent = data.error;
+                    messageEl.style.color = 'red';
                 }
             } catch (err) {
-                document.getElementById('register-error').textContent = 'Error de conexión';
+                messageEl.textContent = 'Error de conexión';
+                messageEl.style.color = 'red';
             }
+        });
+    }
+    
+    if (logoutBtn) {
+        logoutBtn.addEventListener('click', () => {
+            logout();
+            window.location.reload();
         });
     }
 }

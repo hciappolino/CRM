@@ -27,23 +27,6 @@
                 <button type="submit" class="btn-primary">Iniciar Sesión</button>
                 <p class="login-error" id="login-error"></p>
             </form>
-            <div class="register-section">
-                <p>¿No tienes cuenta? <a href="#" id="show-register">Regístrate</a></p>
-            </div>
-            <form id="register-form" style="display:none;">
-                <h3>Crear Cuenta</h3>
-                <div class="form-group">
-                    <label>Usuario</label>
-                    <input type="text" id="reg-username" required>
-                </div>
-                <div class="form-group">
-                    <label>Contraseña</label>
-                    <input type="password" id="reg-password" required>
-                </div>
-                <button type="submit" class="btn-secondary">Registrarse</button>
-                <p class="login-error" id="register-error"></p>
-                <p><a href="#" id="show-login">Volver al login</a></p>
-            </form>
         </div>
     </div>
     <div class="sidebar">
@@ -70,6 +53,9 @@
             </a>
             <a href="#" class="nav-item" data-section="payments">
                 <i class="fas fa-credit-card"></i> Pagos
+            </a>
+            <a href="#" class="nav-item" data-section="settings">
+                <i class="fas fa-cog"></i> Configuración
             </a>
         </nav>
     </div>
@@ -288,6 +274,34 @@
                         <!-- Payments will be loaded here -->
                     </tbody>
                 </table>
+            </div>
+        </section>
+
+        <!-- Settings Section -->
+        <section id="settings" class="section">
+            <h1>Configuración</h1>
+            <div class="card">
+                <h3>Cambiar Contraseña</h3>
+                <form id="change-password-form">
+                    <div class="form-group">
+                        <label>Contraseña Actual</label>
+                        <input type="password" id="current-password" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Nueva Contraseña</label>
+                        <input type="password" id="new-password" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Confirmar Nueva Contraseña</label>
+                        <input type="password" id="confirm-password" required>
+                    </div>
+                    <button type="submit" class="btn-primary">Cambiar Contraseña</button>
+                    <p class="form-message" id="password-message"></p>
+                </form>
+            </div>
+            <div class="card" style="margin-top: 20px;">
+                <h3>Cerrar Sesión</h3>
+                <button id="logout-btn" class="btn-secondary">Cerrar Sesión</button>
             </div>
         </section>
     </main>
