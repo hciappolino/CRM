@@ -37,13 +37,20 @@ app.post('/api/auth/login', async (req, res) => {
     const { username, password } = req.body;
     console.log('Login attempt for user:', username);
     
+    if (!username || !password) {
+      return res.status(400).json({ error: 'Usuario y contraseña requeridos' });
+    }
+    
     const users = await runQuery('SELECT * FROM users WHERE username = $1', [username]);
     console.log('Users found in DB:', users.length);
+    console.log('User data:', users[0] ? { id: users[0].id, username: users[0].username, role: users[0].role } : 'none');
     
     if (users.length === 0) return res.status(400).json({ error: 'Usuario o contraseña incorrecta' });
     
     const user = users[0];
-    console.log('User found, comparing password...');
+    console.log('Stored password hash:', user.password.substring(0, 20) + '...');
+    console.log('Input password:', password);
+    
     const validPassword = await bcrypt.compare(password, user.password);
     console.log('Password valid:', validPassword);
     
@@ -114,6 +121,32 @@ app.post('/api/auth/change-password', authenticateToken, async (req, res) => {
   }
 });
 
+// Reset admin password (debug endpoint - remove in production)
+app.post('/api/auth/reset-admin', async (req, res) => {
+  try {
+    const { secret } = req.body;
+    
+    // Simple secret to prevent unauthorized resets
+    if (secret !== 'reset-admin-123') {
+      return res.status(403).json({ error: 'Invalid secret' });
+    }
+    
+    const hashedPassword = await bcrypt.hash('admin123', 10);
+    
+    // Delete existing admin and create new one
+    await runDelete('DELETE FROM users WHERE username = $1', ['admin']);
+    
+    const result = await runInsert(
+      'INSERT INTO users (username, password, role) VALUES ($1, $2, $3) RETURNING id',
+      ['admin', hashedPassword, 'admin']
+    );
+    
+    res.json({ message: 'Admin password reset successfully', id: result.lastInsertRowid });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // ==================== CLIENTS API ====================
 async function startServer() {
   try {
@@ -153,7 +186,7 @@ app.get('/api/clients/:id', authenticateToken, async (req, res) => {
 });
 
 // Create client
-app.post('/api/clients', async (req, res) => {
+app.post('/api/clients', authenticateToken, async (req, res) => {
   try {
     const { name, phone, email, instagram, whatsapp } = req.body;
     const result = await runInsert(
@@ -167,7 +200,7 @@ app.post('/api/clients', async (req, res) => {
 });
 
 // Update client
-app.put('/api/clients/:id', async (req, res) => {
+app.put('/api/clients/:id', authenticateToken, async (req, res) => {
   try {
     const { name, phone, email, instagram, whatsapp, instagram_active } = req.body;
     await runUpdate(
@@ -181,7 +214,7 @@ app.put('/api/clients/:id', async (req, res) => {
 });
 
 // Delete client
-app.delete('/api/clients/:id', async (req, res) => {
+app.delete('/api/clients/:id', authenticateToken, async (req, res) => {
   try {
     await runDelete('DELETE FROM clients WHERE id = $1', [parseInt(req.params.id)]);
     res.json({ success: true });
