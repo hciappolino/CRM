@@ -8,6 +8,44 @@
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
 </head>
 <body>
+    <!-- Login Overlay -->
+    <div id="login-overlay" class="login-overlay">
+        <div class="login-container">
+            <div class="login-header">
+                <i class="fas fa-shopping-bag"></i>
+                <h2>CRM Tienda de Ropa</h2>
+            </div>
+            <form id="login-form">
+                <div class="form-group">
+                    <label>Usuario</label>
+                    <input type="text" id="login-username" required>
+                </div>
+                <div class="form-group">
+                    <label>Contraseña</label>
+                    <input type="password" id="login-password" required>
+                </div>
+                <button type="submit" class="btn-primary">Iniciar Sesión</button>
+                <p class="login-error" id="login-error"></p>
+            </form>
+            <div class="register-section">
+                <p>¿No tienes cuenta? <a href="#" id="show-register">Regístrate</a></p>
+            </div>
+            <form id="register-form" style="display:none;">
+                <h3>Crear Cuenta</h3>
+                <div class="form-group">
+                    <label>Usuario</label>
+                    <input type="text" id="reg-username" required>
+                </div>
+                <div class="form-group">
+                    <label>Contraseña</label>
+                    <input type="password" id="reg-password" required>
+                </div>
+                <button type="submit" class="btn-secondary">Registrarse</button>
+                <p class="login-error" id="register-error"></p>
+                <p><a href="#" id="show-login">Volver al login</a></p>
+            </form>
+        </div>
+    </div>
     <div class="sidebar">
         <div class="logo">
             <i class="fas fa-shopping-bag"></i>

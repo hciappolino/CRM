@@ -1,5 +1,7 @@
 const { Pool } = require('pg');
 
+console.log('DATABASE_URL:', process.env.DATABASE_URL ? 'Set' : 'NOT SET');
+
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
@@ -7,6 +9,10 @@ const pool = new Pool({
 
 // Initialize database tables
 async function initDb() {
+  if (!process.env.DATABASE_URL) {
+    throw new Error('DATABASE_URL environment variable is not set. Please add PostgreSQL plugin in Railway.');
+  }
+  
   const client = await pool.connect();
   
   try {
@@ -104,6 +110,19 @@ async function initDb() {
         FOREIGN KEY (sale_id) REFERENCES sales(id)
       )
     `);
+    
+    // Create users table
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS users (
+        id SERIAL PRIMARY KEY,
+        username TEXT UNIQUE NOT NULL,
+        password TEXT NOT NULL,
+        role TEXT DEFAULT 'user',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    
+    console.log('Database tables created successfully');
     
     console.log('Database tables created successfully');
   } finally {

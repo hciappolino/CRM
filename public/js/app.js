@@ -2,6 +2,161 @@
 
 const API_BASE = '';
 
+// Auth state
+let authToken = localStorage.getItem('crm_token');
+
+// Override fetch to add auth header
+const originalFetch = window.fetch;
+window.fetch = async function(url, options = {}) {
+    if (authToken && typeof url === 'string' && url.startsWith('/api/')) {
+        options.headers = {
+            ...options.headers,
+            'Authorization': `Bearer ${authToken}`
+        };
+    }
+    const response = originalFetch(url, options);
+    return response;
+};
+
+// API helper with auth
+async function apiCall(url, options = {}) {
+    if (authToken) {
+        options.headers = {
+            ...options.headers,
+            'Authorization': `Bearer ${authToken}`
+        };
+    }
+    const response = await fetch(url, options);
+    if (response.status === 401 || response.status === 403) {
+        logout();
+        throw new Error('Session expired');
+    }
+    return response;
+}
+
+function logout() {
+    localStorage.removeItem('crm_token');
+    localStorage.removeItem('crm_user');
+    authToken = null;
+    document.body.classList.remove('logged-in');
+}
+
+// Check auth on load
+async function checkAuth() {
+    if (!authToken) {
+        document.body.classList.remove('logged-in');
+        return;
+    }
+    
+    try {
+        const response = await fetch('/api/auth/verify', {
+            headers: { 'Authorization': `Bearer ${authToken}` }
+        });
+        if (response.ok) {
+            document.body.classList.add('logged-in');
+            initNavigation();
+            loadDashboard();
+            loadClients();
+            loadProducts();
+            loadSales();
+            loadPayments();
+            loadConversations();
+        } else {
+            logout();
+        }
+    } catch (e) {
+        logout();
+    }
+}
+
+// Login handlers
+function initLoginHandlers() {
+    const loginForm = document.getElementById('login-form');
+    const registerForm = document.getElementById('register-form');
+    const showRegister = document.getElementById('show-register');
+    const showLogin = document.getElementById('show-login');
+    
+    if (loginForm) {
+        loginForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const username = document.getElementById('login-username').value;
+            const password = document.getElementById('login-password').value;
+            
+            try {
+                const response = await fetch('/api/auth/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    authToken = data.token;
+                    localStorage.setItem('crm_token', data.token);
+                    localStorage.setItem('crm_user', JSON.stringify(data.user));
+                    document.body.classList.add('logged-in');
+                    initNavigation();
+                    loadDashboard();
+                    loadClients();
+                    loadProducts();
+                    loadSales();
+                    loadPayments();
+                    loadConversations();
+                } else {
+                    document.getElementById('login-error').textContent = data.error;
+                }
+            } catch (err) {
+                document.getElementById('login-error').textContent = 'Error de conexión';
+            }
+        });
+    }
+    
+    if (showRegister) {
+        showRegister.addEventListener('click', (e) => {
+            e.preventDefault();
+            document.getElementById('login-form').style.display = 'none';
+            document.getElementById('register-form').style.display = 'block';
+        });
+    }
+    
+    if (showLogin) {
+        showLogin.addEventListener('click', (e) => {
+            e.preventDefault();
+            document.getElementById('register-form').style.display = 'none';
+            document.getElementById('login-form').style.display = 'block';
+        });
+    }
+    
+    if (registerForm) {
+        registerForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const username = document.getElementById('reg-username').value;
+            const password = document.getElementById('reg-password').value;
+            
+            try {
+                const response = await fetch('/api/auth/register', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    alert('Usuario creado. Ahora puedes iniciar sesión.');
+                    document.getElementById('register-form').style.display = 'none';
+                    document.getElementById('login-form').style.display = 'block';
+                } else {
+                    document.getElementById('register-error').textContent = data.error;
+                }
+            } catch (err) {
+                document.getElementById('register-error').textContent = 'Error de conexión';
+            }
+        });
+    }
+}
+
 // State
 let currentSection = 'dashboard';
 let currentClientId = null;
@@ -21,13 +176,8 @@ const statusLabels = {
 
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {
-    initNavigation();
-    loadDashboard();
-    loadClients();
-    loadProducts();
-    loadSales();
-    loadPayments();
-    loadConversations();
+    checkAuth();
+    initLoginHandlers();
 });
 
 // Navigation
