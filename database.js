@@ -126,14 +126,19 @@ async function initDb() {
     console.log('Database tables created successfully');
     
     // Create default admin user if none exists
+    console.log('Checking for existing users...');
     const users = await pool.query('SELECT id FROM users LIMIT 1');
+    console.log('Users found:', users.rows.length);
     if (users.rows.length === 0) {
+      console.log('Creating default admin user...');
       const defaultPassword = await bcrypt.hash('admin123', 10);
       await pool.query(
         'INSERT INTO users (username, password, role) VALUES ($1, $2, $3)',
         ['admin', defaultPassword, 'admin']
       );
       console.log('Default admin user created: admin / admin123');
+    } else {
+      console.log('Users already exist, skipping default user creation');
     }
   } finally {
     client.release();
