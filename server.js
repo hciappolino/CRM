@@ -137,23 +137,36 @@ app.post('/api/auth/reset-admin', async (req, res) => {
       return res.status(403).json({ error: 'Invalid secret' });
     }
     
-    const hashedPassword = await bcrypt.hash('admin123', 10);
-    console.log('New hash generated:', hashedPassword);
+    // Generate fresh hash
+    const plainPassword = 'admin123';
+    const newHash = await bcrypt.hash(plainPassword, 10);
+    console.log('New hash generated:', newHash);
+    
+    // Test if new hash works
+    const testResult = await bcrypt.compare(plainPassword, newHash);
+    console.log('New hash test result:', testResult);
     
     // Delete existing admin and create new one
     await runDelete('DELETE FROM users WHERE username = $1', ['admin']);
     
     const result = await runInsert(
       'INSERT INTO users (username, password, role) VALUES ($1, $2, $3) RETURNING id',
-      ['admin', hashedPassword, 'admin']
+      ['admin', newHash, 'admin']
     );
     
-    // Test the password
-    const testResult = await bcrypt.compare('admin123', hashedPassword);
-    console.log('Password test result:', testResult);
+    // Verify the inserted user
+    const verifyUsers = await runQuery('SELECT * FROM users WHERE username = $1', ['admin']);
+    const verifyTest = await bcrypt.compare(plainPassword, verifyUsers[0].password);
+    console.log('Verification test:', verifyTest);
     
-    res.json({ message: 'Admin password reset successfully', id: result.lastInsertRowid, test: testResult });
+    res.json({ 
+      message: 'Admin password reset successfully', 
+      id: result.lastInsertRowid, 
+      newHashTest: testResult,
+      verificationTest: verifyTest
+    });
   } catch (error) {
+    console.log('Reset error:', error);
     res.status(500).json({ error: error.message });
   }
 });
