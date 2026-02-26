@@ -673,7 +673,7 @@ app.post('/api/payments', async (req, res) => {
 // ==================== STATS API ====================
 
 // Get dashboard stats
-app.get('/api/stats', async (req, res) => {
+app.get('/api/stats', authenticateToken, async (req, res) => {
   try {
     const totalClients = await runQuery('SELECT COUNT(*) as count FROM clients');
     const totalProducts = await runQuery('SELECT COUNT(*) as count FROM products');

@@ -227,7 +227,7 @@ function switchSection(section) {
 // Dashboard
 async function loadDashboard() {
     try {
-        const response = await fetch(`${API_BASE}/api/dashboard/stats`);
+        const response = await fetch(`${API_BASE}/api/stats`);
         const stats = await response.json();
         
         document.getElementById('stat-clients').textContent = stats.totalClients;
