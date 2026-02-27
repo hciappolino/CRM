@@ -4,6 +4,9 @@ const API_BASE = '';
 
 // Auth state
 let authToken = localStorage.getItem('crm_token');
+let currentUser = JSON.parse(localStorage.getItem('crm_user') || '{}');
+let isSuperAdmin = false;
+let isTenantAdmin = false;
 
 // Override fetch to add auth header
 const originalFetch = window.fetch;
@@ -53,7 +56,35 @@ async function checkAuth() {
             headers: { 'Authorization': `Bearer ${authToken}` }
         });
         if (response.ok) {
+            const data = await response.json();
+            currentUser = data.user;
+            isSuperAdmin = data.user.role === 'super_admin';
+            isTenantAdmin = data.user.role === 'tenant_admin';
+            
+            // For legacy users (old users table), also show tenant features
+            if (!isSuperAdmin && data.user.tenant_id) {
+                isTenantAdmin = true;
+            }
+            
             document.body.classList.add('logged-in');
+            
+            // Show/hide admin nav based on role
+            if (isSuperAdmin) {
+                document.getElementById('admin-nav').style.display = 'block';
+            } else {
+                document.getElementById('admin-nav').style.display = 'none';
+            }
+            
+            // Show tenant-specific settings
+            if (isTenantAdmin) {
+                document.getElementById('tenant-profile-card').style.display = 'block';
+                document.getElementById('api-config-card').style.display = 'block';
+                document.getElementById('message-stats-card').style.display = 'block';
+                loadTenantProfile();
+                loadTenantConfig();
+                loadMessageStats();
+            }
+            
             initNavigation();
             initSettingsHandlers();
             loadDashboard();
@@ -73,6 +104,7 @@ async function checkAuth() {
 // Login handlers
 function initLoginHandlers() {
     const loginForm = document.getElementById('login-form');
+    const registerForm = document.getElementById('register-form');
     
     if (loginForm) {
         loginForm.addEventListener('submit', async (e) => {
@@ -91,9 +123,32 @@ function initLoginHandlers() {
                 
                 if (response.ok) {
                     authToken = data.token;
+                    currentUser = data.user;
+                    isSuperAdmin = data.user.role === 'super_admin';
+                    isTenantAdmin = data.user.role === 'tenant_admin';
+                    
                     localStorage.setItem('crm_token', data.token);
                     localStorage.setItem('crm_user', JSON.stringify(data.user));
+                    
                     document.body.classList.add('logged-in');
+                    
+                    // Show/hide admin nav based on role
+                    if (isSuperAdmin) {
+                        document.getElementById('admin-nav').style.display = 'block';
+                    } else {
+                        document.getElementById('admin-nav').style.display = 'none';
+                    }
+                    
+                    // Show tenant-specific settings
+                    if (isTenantAdmin) {
+                        document.getElementById('tenant-profile-card').style.display = 'block';
+                        document.getElementById('api-config-card').style.display = 'block';
+                        document.getElementById('message-stats-card').style.display = 'block';
+                        loadTenantProfile();
+                        loadTenantConfig();
+                        loadMessageStats();
+                    }
+                    
                     initNavigation();
                     initSettingsHandlers();
                     loadDashboard();
@@ -110,6 +165,62 @@ function initLoginHandlers() {
             }
         });
     }
+    
+    if (registerForm) {
+        registerForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const name = document.getElementById('register-name').value;
+            const owner_name = document.getElementById('register-owner-name').value;
+            const owner_email = document.getElementById('register-email').value;
+            const owner_phone = document.getElementById('register-phone').value;
+            const password = document.getElementById('register-password').value;
+            
+            try {
+                const response = await fetch('/api/tenants/register', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name, owner_name, owner_email, owner_phone, password })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    document.getElementById('register-form').reset();
+                    document.getElementById('register-success').textContent = data.message;
+                    document.getElementById('register-success').style.display = 'block';
+                    document.getElementById('register-success').style.color = 'green';
+                    document.getElementById('register-error').style.display = 'none';
+                    
+                    // Show login form after 3 seconds
+                    setTimeout(() => {
+                        showLoginForm();
+                    }, 3000);
+                } else {
+                    document.getElementById('register-error').textContent = data.error;
+                    document.getElementById('register-error').style.display = 'block';
+                    document.getElementById('register-success').style.display = 'none';
+                }
+            } catch (err) {
+                document.getElementById('register-error').textContent = 'Error de conexión';
+                document.getElementById('register-error').style.display = 'block';
+            }
+        });
+    }
+}
+
+// Show register form
+function showRegisterForm() {
+    document.getElementById('login-form').parentElement.style.display = 'none';
+    document.getElementById('register-container').style.display = 'block';
+}
+
+// Show login form
+function showLoginForm() {
+    document.getElementById('register-container').style.display = 'none';
+    document.getElementById('login-form').parentElement.style.display = 'block';
+    document.getElementById('register-form').reset();
+    document.getElementById('register-success').style.display = 'none';
+    document.getElementById('register-error').style.display = 'none';
 }
 
 // Password change handler
@@ -163,6 +274,123 @@ function initSettingsHandlers() {
             logout();
             window.location.reload();
         });
+    }
+    
+    // API Config form handler
+    const apiConfigForm = document.getElementById('api-config-form');
+    if (apiConfigForm) {
+        apiConfigForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const messageEl = document.getElementById('api-config-message');
+            
+            const configData = {
+                whatsapp_enabled: document.getElementById('whatsapp-enabled').checked,
+                whatsapp_phone_id: document.getElementById('whatsapp-phone-id').value || null,
+                whatsapp_token: document.getElementById('whatsapp-token').value || null,
+                whatsapp_business_account_id: document.getElementById('whatsapp-business-account-id').value || null,
+                instagram_enabled: document.getElementById('instagram-enabled').checked,
+                instagram_business_account_id: document.getElementById('instagram-business-account-id').value || null,
+                instagram_access_token: document.getElementById('instagram-access-token').value || null,
+                max_messages_per_day: parseInt(document.getElementById('max-messages-per-day').value) || 100,
+                max_messages_per_month: parseInt(document.getElementById('max-messages-per-month').value) || 1000,
+                allow_marketing_messages: document.getElementById('allow-marketing-messages').checked
+            };
+            
+            try {
+                const response = await fetch('/api/tenants/config', {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authToken}`
+                    },
+                    body: JSON.stringify(configData)
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    messageEl.textContent = 'Configuración guardada exitosamente';
+                    messageEl.style.color = 'green';
+                    // Clear password fields
+                    document.getElementById('whatsapp-token').value = '';
+                    document.getElementById('instagram-access-token').value = '';
+                } else {
+                    messageEl.textContent = data.error;
+                    messageEl.style.color = 'red';
+                }
+            } catch (err) {
+                messageEl.textContent = 'Error de conexión';
+                messageEl.style.color = 'red';
+            }
+        });
+    }
+}
+
+// Load tenant profile
+async function loadTenantProfile() {
+    try {
+        const response = await fetch('/api/tenants/profile', {
+            headers: { 'Authorization': `Bearer ${authToken}` }
+        });
+        const tenant = await response.json();
+        
+        const infoDiv = document.getElementById('tenant-profile-info');
+        infoDiv.innerHTML = `
+            <p><strong>Nombre:</strong> ${tenant.name}</p>
+            <p><strong>Slug:</strong> ${tenant.slug}</p>
+            <p><strong>Dueño:</strong> ${tenant.owner_name}</p>
+            <p><strong>Email:</strong> ${tenant.owner_email}</p>
+            <p><strong>Teléfono:</strong> ${tenant.owner_phone || 'No definido'}</p>
+            <p><strong>Estado:</strong> <span class="status-badge status-${tenant.status}">${tenant.status}</span></p>
+            <p><strong>Plan:</strong> ${tenant.plan}</p>
+            <p><strong>Creado:</strong> ${new Date(tenant.created_at).toLocaleDateString()}</p>
+        `;
+    } catch (err) {
+        console.error('Error loading tenant profile:', err);
+    }
+}
+
+// Load tenant config
+async function loadTenantConfig() {
+    try {
+        const response = await fetch('/api/tenants/config', {
+            headers: { 'Authorization': `Bearer ${authToken}` }
+        });
+        const config = await response.json();
+        
+        document.getElementById('whatsapp-enabled').checked = config.whatsapp_enabled || false;
+        document.getElementById('whatsapp-phone-id').value = config.whatsapp_phone_id || '';
+        document.getElementById('whatsapp-business-account-id').value = config.whatsapp_business_account_id || '';
+        document.getElementById('instagram-enabled').checked = config.instagram_enabled || false;
+        document.getElementById('instagram-business-account-id').value = config.instagram_business_account_id || '';
+        document.getElementById('max-messages-per-day').value = config.max_messages_per_day || 100;
+        document.getElementById('max-messages-per-month').value = config.max_messages_per_month || 1000;
+        document.getElementById('allow-marketing-messages').checked = config.allow_marketing_messages || false;
+    } catch (err) {
+        console.error('Error loading tenant config:', err);
+    }
+}
+
+// Load message stats
+async function loadMessageStats() {
+    try {
+        const response = await fetch('/api/messages/stats', {
+            headers: { 'Authorization': `Bearer ${authToken}` }
+        });
+        const stats = await response.json();
+        
+        const infoDiv = document.getElementById('message-stats-info');
+        infoDiv.innerHTML = `
+            <p><strong>Mensajes hoy:</strong> ${stats.messages_sent_today} / ${stats.max_messages_per_day}</p>
+            <p><strong>Mensajes este mes:</strong> ${stats.messages_sent_monthly} / ${stats.max_messages_per_month}</p>
+            <p><strong>Mensajes marketing:</strong> ${stats.allow_marketing_messages ? 'Permitidos' : 'No permitidos'}</p>
+            <progress value="${stats.messages_sent_today}" max="${stats.max_messages_per_day}" style="width:100%"></progress>
+            <p style="font-size: 0.8em; color: #666">Uso diario</p>
+            <progress value="${stats.messages_sent_monthly}" max="${stats.max_messages_per_month}" style="width:100%"></progress>
+            <p style="font-size: 0.8em; color: #666">Uso mensual</p>
+        `;
+    } catch (err) {
+        console.error('Error loading message stats:', err);
     }
 }
 
@@ -222,6 +450,7 @@ function switchSection(section) {
     if (section === 'products') loadProducts();
     if (section === 'sales') loadSales();
     if (section === 'payments') loadPayments();
+    if (section === 'admin' && isSuperAdmin) loadAdminPanel();
 }
 
 // Dashboard
@@ -233,11 +462,168 @@ async function loadDashboard() {
         document.getElementById('stat-clients').textContent = stats.totalClients;
         document.getElementById('stat-products').textContent = stats.totalProducts;
         document.getElementById('stat-low-stock').textContent = stats.lowStockProducts;
-        document.getElementById('stat-today-sales').textContent = `$${parseFloat(stats.todayRevenue).toFixed(2)}`;
+        document.getElementById('stat-today-sales').textContent = `${parseFloat(stats.todayRevenue).toFixed(2)}`;
         document.getElementById('stat-month-sales').textContent = stats.monthSales;
-        document.getElementById('stat-pending').textContent = `$${parseFloat(stats.pendingAmount).toFixed(2)}`;
+        document.getElementById('stat-pending').textContent = `${parseFloat(stats.pendingAmount).toFixed(2)}`;
+        
+        // Also update message stats if available
+        if (stats.messagesSentToday !== undefined) {
+            // Add message stats to dashboard if there's a place for it
+        }
     } catch (error) {
         console.error('Error loading dashboard:', error);
+    }
+}
+
+// Admin Panel
+async function loadAdminPanel() {
+    try {
+        // Load stats
+        const statsResponse = await fetch('/api/admin/stats', {
+            headers: { 'Authorization': `Bearer ${authToken}` }
+        });
+        const stats = await statsResponse.json();
+        
+        document.getElementById('admin-total-tenants').textContent = stats.totalTenants;
+        document.getElementById('admin-active-tenants').textContent = stats.activeTenants;
+        document.getElementById('admin-pending-tenants').textContent = stats.pendingTenants;
+        document.getElementById('admin-total-messages').textContent = stats.totalMessagesSent;
+        
+        // Load pending tenants
+        const pendingResponse = await fetch('/api/admin/tenants/pending', {
+            headers: { 'Authorization': `Bearer ${authToken}` }
+        });
+        const pendingTenants = await pendingResponse.json();
+        
+        const pendingBody = document.getElementById('pending-tenants-body');
+        if (pendingTenants.length === 0) {
+            pendingBody.innerHTML = '<tr><td colspan="5">No hay tiendas pendientes</td></tr>';
+        } else {
+            pendingBody.innerHTML = pendingTenants.map(tenant => `
+                <tr>
+                    <td>${tenant.name}</td>
+                    <td>${tenant.owner_name}</td>
+                    <td>${tenant.owner_email}</td>
+                    <td>${new Date(tenant.created_at).toLocaleDateString()}</td>
+                    <td>
+                        <button class="btn-primary btn-sm" onclick="approveTenant(${tenant.id})">Aprobar</button>
+                        <button class="btn-secondary btn-sm" onclick="rejectTenant(${tenant.id})">Rechazar</button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+        
+        // Load all tenants
+        const allResponse = await fetch('/api/admin/tenants', {
+            headers: { 'Authorization': `Bearer ${authToken}` }
+        });
+        const allTenants = await allResponse.json();
+        
+        const allBody = document.getElementById('all-tenants-body');
+        allBody.innerHTML = allTenants.map(tenant => `
+            <tr>
+                <td>${tenant.name}</td>
+                <td>${tenant.owner_name}</td>
+                <td>${tenant.owner_email}</td>
+                <td><span class="status-badge status-${tenant.status}">${tenant.status}</span></td>
+                <td>${tenant.messages_sent_monthly}</td>
+                <td>
+                    ${tenant.status === 'active' ? `<button class="btn-warning btn-sm" onclick="suspendTenant(${tenant.id})">Suspender</button>` : ''}
+                    ${tenant.status === 'suspended' ? `<button class="btn-primary btn-sm" onclick="reactivateTenant(${tenant.id})">Reactivar</button>` : ''}
+                </td>
+            </tr>
+        `).join('');
+        
+    } catch (error) {
+        console.error('Error loading admin panel:', error);
+    }
+}
+
+// Approve tenant
+async function approveTenant(tenantId) {
+    if (!confirm('¿Aprobar esta tienda?')) return;
+    
+    try {
+        const response = await fetch(`/api/admin/tenants/${tenantId}/approve`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${authToken}` }
+        });
+        
+        if (response.ok) {
+            loadAdminPanel();
+        } else {
+            const data = await response.json();
+            alert(data.error);
+        }
+    } catch (error) {
+        console.error('Error approving tenant:', error);
+    }
+}
+
+// Reject tenant
+async function rejectTenant(tenantId) {
+    const reason = prompt('Motivo del rechazo (opcional):');
+    
+    try {
+        const response = await fetch(`/api/admin/tenants/${tenantId}/reject`, {
+            method: 'POST',
+            headers: { 
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${authToken}` 
+            },
+            body: JSON.stringify({ reason: reason || '' })
+        });
+        
+        if (response.ok) {
+            loadAdminPanel();
+        } else {
+            const data = await response.json();
+            alert(data.error);
+        }
+    } catch (error) {
+        console.error('Error rejecting tenant:', error);
+    }
+}
+
+// Suspend tenant
+async function suspendTenant(tenantId) {
+    if (!confirm('¿Suspender esta tienda?')) return;
+    
+    try {
+        const response = await fetch(`/api/admin/tenants/${tenantId}/suspend`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${authToken}` }
+        });
+        
+        if (response.ok) {
+            loadAdminPanel();
+        } else {
+            const data = await response.json();
+            alert(data.error);
+        }
+    } catch (error) {
+        console.error('Error suspending tenant:', error);
+    }
+}
+
+// Reactivate tenant
+async function reactivateTenant(tenantId) {
+    if (!confirm('¿Reactivar esta tienda?')) return;
+    
+    try {
+        const response = await fetch(`/api/admin/tenants/${tenantId}/reactivate`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${authToken}` }
+        });
+        
+        if (response.ok) {
+            loadAdminPanel();
+        } else {
+            const data = await response.json();
+            alert(data.error);
+        }
+    } catch (error) {
+        console.error('Error reactivating tenant:', error);
     }
 }
 
@@ -751,6 +1137,11 @@ async function loadConversations() {
                             <div class="preview">${conv.last_message || 'Sin mensajes'}</div>
                             <div class="time">${conv.last_message_at ? new Date(conv.last_message_at).toLocaleString() : ''}</div>
                             ${conv.unread_count > 0 ? `<span class="badge" style="display:inline-block;margin-top:4px">${conv.unread_count}</span>` : ''}
+                            <div class="conversation-badges">
+                                ${conv.presupuesto_enviado ? '<span class="conv-badge" title="Presupuesto Enviado">📄</span>' : ''}
+                                ${conv.pago_realizado ? '<span class="conv-badge" title="Pago Realizado">💳</span>' : ''}
+                                ${conv.envio_realizado ? '<span class="conv-badge" title="Envío Realizado">🚚</span>' : ''}
+                            </div>
                         </div>
                     `).join('')}
                 </div>
@@ -764,6 +1155,11 @@ async function loadConversations() {
                     <div class="preview">${conv.last_message || 'Sin mensajes'}</div>
                     <div class="time">${conv.last_message_at ? new Date(conv.last_message_at).toLocaleString() : ''}</div>
                     ${conv.unread_count > 0 ? `<span class="badge" style="display:inline-block;margin-top:4px">${conv.unread_count}</span>` : ''}
+                    <div class="conversation-badges">
+                        ${conv.presupuesto_enviado ? '<span class="conv-badge" title="Presupuesto Enviado">📄</span>' : ''}
+                        ${conv.pago_realizado ? '<span class="conv-badge" title="Pago Realizado">💳</span>' : ''}
+                        ${conv.envio_realizado ? '<span class="conv-badge" title="Envío Realizado">🚚</span>' : ''}
+                    </div>
                     <div class="conversation-status">${statusLabels[conv.conversation_status] || statusLabels['nuevo']}</div>
                 </div>
             `).join('');
@@ -846,7 +1242,12 @@ async function openConversation(clientId, clientName) {
         platformBadge.textContent = platformSelect.value === 'whatsapp' ? 'WhatsApp' : 'Instagram';
         
         // Set conversation status
-        document.getElementById('conversation-status').value = client.conversation_status || 'novo';
+        document.getElementById('conversation-status').value = client.conversation_status || 'nuevo';
+        
+        // Set checkbox states
+        document.getElementById('presupuesto-enviado').checked = client.presupuesto_enviado || false;
+        document.getElementById('pago-realizado').checked = client.pago_realizado || false;
+        document.getElementById('envio-realizado').checked = client.envio_realizado || false;
     } catch (error) {
         console.error('Error loading client:', error);
     }
@@ -976,6 +1377,28 @@ async function updateConversationStatus() {
         loadConversations();
     } catch (error) {
         console.error('Error updating status:', error);
+    }
+}
+
+async function updateCheckboxes() {
+    if (!currentClientId) return;
+    
+    const presupuestoEnviado = document.getElementById('presupuesto-enviado').checked;
+    const pagoRealizado = document.getElementById('pago-realizado').checked;
+    const envioRealizado = document.getElementById('envio-realizado').checked;
+    
+    try {
+        await fetch(`${API_BASE}/api/clients/${currentClientId}/checkboxes`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+                presupuesto_enviado: presupuestoEnviado,
+                pago_realizado: pagoRealizado,
+                envio_realizado: envioRealizado
+            })
+        });
+    } catch (error) {
+        console.error('Error updating checkboxes:', error);
     }
 }
 

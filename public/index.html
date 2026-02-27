@@ -17,7 +17,7 @@
             </div>
             <form id="login-form">
                 <div class="form-group">
-                    <label>Usuario</label>
+                    <label>Usuario / Email</label>
                     <input type="text" id="login-username" required>
                 </div>
                 <div class="form-group">
@@ -27,6 +27,45 @@
                 <button type="submit" class="btn-primary">Iniciar Sesión</button>
                 <p class="login-error" id="login-error"></p>
             </form>
+            <div class="login-footer">
+                <button type="button" class="btn-link" onclick="showRegisterForm()">Crear nueva tienda</button>
+            </div>
+        </div>
+        
+        <!-- Registration Container -->
+        <div class="login-container" id="register-container" style="display:none">
+            <div class="login-header">
+                <i class="fas fa-store"></i>
+                <h2>Crear Nueva Tienda</h2>
+            </div>
+            <form id="register-form">
+                <div class="form-group">
+                    <label>Nombre de la Tienda</label>
+                    <input type="text" id="register-name" required>
+                </div>
+                <div class="form-group">
+                    <label>Nombre del Dueño</label>
+                    <input type="text" id="register-owner-name" required>
+                </div>
+                <div class="form-group">
+                    <label>Email</label>
+                    <input type="email" id="register-email" required>
+                </div>
+                <div class="form-group">
+                    <label>Teléfono</label>
+                    <input type="tel" id="register-phone">
+                </div>
+                <div class="form-group">
+                    <label>Contraseña</label>
+                    <input type="password" id="register-password" required>
+                </div>
+                <button type="submit" class="btn-primary">Registrarse</button>
+                <p class="login-error" id="register-error"></p>
+                <p class="login-success" id="register-success" style="display:none"></p>
+            </form>
+            <div class="login-footer">
+                <button type="button" class="btn-link" onclick="showLoginForm()">Volver al login</button>
+            </div>
         </div>
     </div>
     <div class="sidebar">
@@ -34,7 +73,7 @@
             <i class="fas fa-shopping-bag"></i>
             <span>CRM Ropa</span>
         </div>
-        <nav>
+        <nav id="main-nav">
             <a href="#" class="nav-item active" data-section="dashboard">
                 <i class="fas fa-chart-line"></i> Dashboard
             </a>
@@ -56,6 +95,13 @@
             </a>
             <a href="#" class="nav-item" data-section="settings">
                 <i class="fas fa-cog"></i> Configuración
+            </a>
+        </nav>
+        <!-- Admin Panel Nav (visible only for super_admin) -->
+        <nav id="admin-nav" style="display:none">
+            <div class="nav-divider">Administración</div>
+            <a href="#" class="nav-item" data-section="admin">
+                <i class="fas fa-users-cog"></i> Gestionar Tiendas
             </a>
         </nav>
     </div>
@@ -157,6 +203,20 @@
                             <option value="completado">📦 Completado</option>
                             <option value="cancelado">❌ Cancelado</option>
                         </select>
+                        <div class="conversation-checkboxes">
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="presupuesto-enviado" onchange="updateCheckboxes()">
+                                <span>📄 Presupuesto Enviado</span>
+                            </label>
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="pago-realizado" onchange="updateCheckboxes()">
+                                <span>💳 Pago Realizado</span>
+                            </label>
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="envio-realizado" onchange="updateCheckboxes()">
+                                <span>🚚 Envío Realizado</span>
+                            </label>
+                        </div>
                         <div class="quick-actions">
                             <button class="btn-primary btn-sm" onclick="openSaleFromChat()">
                                 <i class="fas fa-shopping-cart"></i> Nueva Venta
@@ -280,6 +340,70 @@
         <!-- Settings Section -->
         <section id="settings" class="section">
             <h1>Configuración</h1>
+            
+            <!-- Tenant Profile -->
+            <div class="card" id="tenant-profile-card" style="display:none">
+                <h3>Información de la Tienda</h3>
+                <div id="tenant-profile-info"></div>
+            </div>
+            
+            <!-- API Configuration -->
+            <div class="card" id="api-config-card" style="display:none">
+                <h3>Configuración de APIs (WhatsApp/Instagram)</h3>
+                <form id="api-config-form">
+                    <div class="form-group checkbox">
+                        <input type="checkbox" id="whatsapp-enabled">
+                        <label>Activar WhatsApp</label>
+                    </div>
+                    <div class="form-group">
+                        <label>WhatsApp Phone ID</label>
+                        <input type="text" id="whatsapp-phone-id">
+                    </div>
+                    <div class="form-group">
+                        <label>WhatsApp Access Token</label>
+                        <input type="password" id="whatsapp-token" placeholder="Ingresa tu token de WhatsApp Business API">
+                    </div>
+                    <div class="form-group">
+                        <label>WhatsApp Business Account ID</label>
+                        <input type="text" id="whatsapp-business-account-id">
+                    </div>
+                    <div class="form-group checkbox">
+                        <input type="checkbox" id="instagram-enabled">
+                        <label>Activar Instagram</label>
+                    </div>
+                    <div class="form-group">
+                        <label>Instagram Business Account ID</label>
+                        <input type="text" id="instagram-business-account-id">
+                    </div>
+                    <div class="form-group">
+                        <label>Instagram Access Token</label>
+                        <input type="password" id="instagram-access-token" placeholder="Ingresa tu token de Instagram Graph API">
+                    </div>
+                    <hr>
+                    <h4>Límites de Mensajes</h4>
+                    <div class="form-group">
+                        <label>Mensajes por día</label>
+                        <input type="number" id="max-messages-per-day" value="100">
+                    </div>
+                    <div class="form-group">
+                        <label>Mensajes por mes</label>
+                        <input type="number" id="max-messages-per-month" value="1000">
+                    </div>
+                    <div class="form-group checkbox">
+                        <input type="checkbox" id="allow-marketing-messages">
+                        <label>Permitir mensajes de marketing (no recomendado)</label>
+                    </div>
+                    <button type="submit" class="btn-primary">Guardar Configuración</button>
+                    <p class="form-message" id="api-config-message"></p>
+                </form>
+            </div>
+            
+            <!-- Message Stats -->
+            <div class="card" id="message-stats-card" style="display:none">
+                <h3>Uso de Mensajes</h3>
+                <div id="message-stats-info"></div>
+            </div>
+            
             <div class="card">
                 <h3>Cambiar Contraseña</h3>
                 <form id="change-password-form">
@@ -302,6 +426,78 @@
             <div class="card" style="margin-top: 20px;">
                 <h3>Cerrar Sesión</h3>
                 <button id="logout-btn" class="btn-secondary">Cerrar Sesión</button>
+            </div>
+        </section>
+        
+        <!-- Admin Section -->
+        <section id="admin" class="section">
+            <h1>Panel de Administración</h1>
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <i class="fas fa-store"></i>
+                    <div class="stat-info">
+                        <h3>Total Tiendas</h3>
+                        <p class="stat-value" id="admin-total-tenants">0</p>
+                    </div>
+                </div>
+                <div class="stat-card success">
+                    <i class="fas fa-check-circle"></i>
+                    <div class="stat-info">
+                        <h3>Tiendas Activas</h3>
+                        <p class="stat-value" id="admin-active-tenants">0</p>
+                    </div>
+                </div>
+                <div class="stat-card warning">
+                    <i class="fas fa-clock"></i>
+                    <div class="stat-info">
+                        <h3>Pendientes</h3>
+                        <p class="stat-value" id="admin-pending-tenants">0</p>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <i class="fas fa-envelope"></i>
+                    <div class="stat-info">
+                        <h3>Mensajes Enviados</h3>
+                        <p class="stat-value" id="admin-total-messages">0</p>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="card">
+                <h3>Tiendas Pendientes de Aprobación</h3>
+                <table id="pending-tenants-table">
+                    <thead>
+                        <tr>
+                            <th>Nombre</th>
+                            <th>Dueño</th>
+                            <th>Email</th>
+                            <th>Fecha</th>
+                            <th>Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody id="pending-tenants-body">
+                        <tr><td colspan="5">Cargando...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+            
+            <div class="card" style="margin-top: 20px;">
+                <h3>Todas las Tiendas</h3>
+                <table id="all-tenants-table">
+                    <thead>
+                        <tr>
+                            <th>Nombre</th>
+                            <th>Dueño</th>
+                            <th>Email</th>
+                            <th>Estado</th>
+                            <th>Mensajes</th>
+                            <th>Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody id="all-tenants-body">
+                        <tr><td colspan="6">Cargando...</td></tr>
+                    </tbody>
+                </table>
             </div>
         </section>
     </main>

@@ -656,6 +656,56 @@ h1 {
     margin-left: auto;
 }
 
+.conversation-checkboxes {
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+    margin-left: 20px;
+    padding-left: 20px;
+    border-left: 1px solid var(--dark-border);
+}
+
+.checkbox-label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    color: var(--text-secondary);
+    font-size: 13px;
+    transition: color 0.2s ease;
+}
+
+.checkbox-label:hover {
+    color: var(--text-primary);
+}
+
+.checkbox-label input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+    cursor: pointer;
+    accent-color: var(--primary);
+}
+
+.checkbox-label input[type="checkbox"]:checked + span {
+    color: var(--primary);
+    font-weight: 500;
+}
+
+.conversation-badges {
+    display: flex;
+    gap: 4px;
+    margin-top: 4px;
+}
+
+.conv-badge {
+    font-size: 14px;
+    opacity: 0.9;
+}
+
+.conv-badge:hover {
+    opacity: 1;
+}
+
 .btn-sm {
     padding: 8px 14px;
     font-size: 12px;
